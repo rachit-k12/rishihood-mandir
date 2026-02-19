@@ -67,7 +67,7 @@ export default function Hero() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.6 }}
-          className="font-devanagari text-accent-saffron text-base md:text-xl lg:text-2xl mb-3 text-shadow-saffron"
+          className="font-devanagari text-accent-orange text-2xl lg:text-2xl mb-3 text-shadow-saffron"
         >
           ॥ ॐ नमः शिवाय ॥
         </motion.p>
@@ -77,11 +77,11 @@ export default function Hero() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, delay: 0.9 }}
-          className="font-heading text-temple-crimson text-3xl md:text-5xl lg:text-7xl font-bold italic leading-[1.15] max-w-2xl"
+          className="font-heading text-temple-crimson text-[24px] md:text-[36px] lg:text-[44px] italic font-semibold leading-normal max-w-3xl"
         >
-          A Sacred Space,
+          FOR TODAY&apos;S STUDENTS,
           <br />
-          Built by Belief.
+          FOR GENERATIONS TO COME
         </motion.h1>
 
         {/* Subtext */}
@@ -89,10 +89,9 @@ export default function Hero() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 1.3 }}
-          className="font-body text-medium text-sm md:text-base max-w-md mt-4 leading-relaxed"
+          className="font-body text-medium text-lg max-w-md mt-4 leading-relaxed"
         >
-          The Shiva Temple at Rishihood University — envisioned by students,
-          rooted in ancient tradition, designed in the Nagara style.
+          The Shiva Temple at Rishihood University was brought to life by students, drawing from ancient traditions and crafted in the distinctive Nagara style.
         </motion.p>
 
         {/* CTA Button */}
