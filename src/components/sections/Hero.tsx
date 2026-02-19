@@ -42,7 +42,14 @@ export default function Hero() {
 
       {/* Bottom gradient — short, just for seamless transition to next section */}
       <div className="absolute inset-x-0 bottom-0 h-[10%] md:h-[25%] bg-gradient-to-t from-cream via-cream/60 to-transparent" />
-
+      <motion.p
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.6 }}
+          className="absolute md:top-14 top-9 left-1/2 -translate-x-1/2 -translate-y-1/2 font-devanagari text-accent-orange text-2xl lg:text-3xl mb-3 text-shadow-saffron"
+        >
+          ॥ ॐ ॥
+        </motion.p>
       {/* Top-left logo */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -62,15 +69,6 @@ export default function Hero() {
 
       {/* Content — positioned in the upper sky area */}
       <div className="relative z-10 h-full flex flex-col justify-start pt-20 md:pt-24 lg:pt-28 px-6 md:px-12 lg:px-20 max-w-7xl mx-auto">
-        {/* Sanskrit Mantra */}
-        <motion.p
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.6 }}
-          className="font-devanagari text-accent-orange text-2xl lg:text-2xl mb-3 text-shadow-saffron"
-        >
-          ॥ ॐ नमः शिवाय ॥
-        </motion.p>
 
         {/* Main Headline */}
         <motion.h1

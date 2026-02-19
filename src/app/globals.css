@@ -125,22 +125,14 @@ body {
   color: var(--text-dark);
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--bg-cream);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--temple-gold-muted);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--temple-gold);
+/* OverlayScrollbars — auto-hide overlay scrollbar */
+.os-scrollbar {
+  --os-handle-bg: var(--temple-gold-muted);
+  --os-handle-bg-hover: var(--temple-gold);
+  --os-handle-bg-active: var(--temple-gold);
+  --os-size: 8px;
+  --os-handle-border-radius: 4px;
+  transition: opacity 0.3s;
 }
 
 /* Utility Classes */

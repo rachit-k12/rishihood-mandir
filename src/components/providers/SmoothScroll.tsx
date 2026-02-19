@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 import Lenis from "lenis";
+import { OverlayScrollbars } from "overlayscrollbars";
+import "overlayscrollbars/overlayscrollbars.css";
 
 export default function SmoothScroll({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -18,8 +20,21 @@ export default function SmoothScroll({ children }: { children: React.ReactNode }
 
     requestAnimationFrame(raf);
 
+    // OverlayScrollbars — auto-hide scrollbar, only visible while scrolling
+    const osInstance = OverlayScrollbars(document.body, {
+      scrollbars: {
+        autoHide: "scroll",
+        autoHideDelay: 500,
+        theme: "os-theme-dark",
+      },
+      overflow: {
+        x: "hidden",
+      },
+    });
+
     return () => {
       lenis.destroy();
+      osInstance.destroy();
     };
   }, []);
 
