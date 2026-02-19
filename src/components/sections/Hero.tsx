@@ -68,7 +68,7 @@ export default function Hero() {
       </motion.div>
 
       {/* Content — positioned in the upper sky area */}
-      <div className="relative z-10 h-full flex flex-col justify-start pt-20 md:pt-24 lg:pt-28 px-6 md:px-12 lg:px-20 max-w-7xl mx-auto">
+      <div className="relative z-10 h-full flex flex-col justify-start pt-28 lg:pt-32 px-6 md:px-12 lg:px-20 max-w-7xl mx-auto">
 
         {/* Main Headline */}
         <motion.h1
