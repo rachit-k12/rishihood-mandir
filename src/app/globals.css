@@ -1,26 +1,156 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Primary — Temple Red */
+  --temple-crimson: #8B1A1A;
+  --temple-crimson-hover: #A52A2A;
+  --temple-red-bright: #C41E3A;
+
+  /* Gold / Copper */
+  --temple-gold: #C8956C;
+  --temple-gold-light: #D4A574;
+  --temple-gold-muted: #BFA48A;
+
+  /* Backgrounds */
+  --bg-cream: #FDF5E6;
+  --bg-cream-dark: #F5E6D0;
+  --bg-warm-white: #FEFCF8;
+  --bg-section-alt: #FAF0E4;
+
+  /* Text */
+  --text-dark: #2C1810;
+  --text-medium: #5C3A28;
+  --text-light: #8B7355;
+  --text-on-dark: #FDF5E6;
+
+  /* Accents */
+  --accent-orange: #D4622B;
+  --accent-saffron: #E8863A;
+  --accent-orange-glow: rgba(240, 152, 64, 0.125);
+
+  /* Mandala */
+  --mandala-rose: rgba(201, 164, 150, 0.5);
+  --mandala-light: rgba(212, 184, 166, 0.25);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Colors */
+  --color-temple-crimson: var(--temple-crimson);
+  --color-temple-crimson-hover: var(--temple-crimson-hover);
+  --color-temple-red: var(--temple-red-bright);
+  --color-temple-gold: var(--temple-gold);
+  --color-temple-gold-light: var(--temple-gold-light);
+  --color-temple-gold-muted: var(--temple-gold-muted);
+  --color-cream: var(--bg-cream);
+  --color-cream-dark: var(--bg-cream-dark);
+  --color-warm-white: var(--bg-warm-white);
+  --color-section-alt: var(--bg-section-alt);
+  --color-dark: var(--text-dark);
+  --color-medium: var(--text-medium);
+  --color-light: var(--text-light);
+  --color-on-dark: var(--text-on-dark);
+  --color-accent-orange: var(--accent-orange);
+  --color-accent-saffron: var(--accent-saffron);
+  --color-footer-dark: #2C1810;
+
+  /* Fonts */
+  --font-heading: var(--font-playfair);
+  --font-body: var(--font-dm-sans);
+  --font-letter: var(--font-cormorant);
+  --font-devanagari: var(--font-noto-devanagari);
+
+  /* Ink color for parchment */
+  --color-ink-sepia: #6B2020;
+
+  /* Animations */
+  --animate-mandala-spin: mandala-spin 120s linear infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-scroll-hint: scroll-hint 2s ease-in-out infinite;
+  --animate-pulse-glow: pulse-glow 3s ease-in-out infinite;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@keyframes mandala-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes scroll-hint {
+  0%, 100% { opacity: 0.4; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(8px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(196, 30, 58, 0.2); }
+  50% { box-shadow: 0 0 30px rgba(196, 30, 58, 0.4); }
+}
+
+/* Lenis Smooth Scroll */
+html.lenis, html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+/* Base Styles */
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-cream);
+  color: var(--text-dark);
+  font-family: var(--font-dm-sans), 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Selection Color */
+::selection {
+  background: var(--temple-gold-light);
+  color: var(--text-dark);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-cream);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--temple-gold-muted);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--temple-gold);
+}
+
+/* Utility Classes */
+.text-shadow-saffron {
+  text-shadow: 0 0 30px rgba(232, 134, 58, 0.3);
+}
+
+.section-divider {
+  width: 60px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--temple-gold), transparent);
+  margin: 0 auto;
 }
