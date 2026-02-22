@@ -1,11 +1,85 @@
 "use client";
 
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Download, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { formatCurrency } from "@/lib/constants";
 
-export default function DonationSuccess() {
+interface DonationData {
+  txnid: string;
+  amount: number;
+  status: string;
+  paymentMode: string;
+  bankRefNum: string;
+  createdAt: string;
+  donor: {
+    fullName: string;
+    email: string;
+    pan: string | null;
+    aadhaar: string | null;
+    digilockerVerified: boolean;
+  };
+}
+
+function SuccessContent() {
+  const searchParams = useSearchParams();
+  const txnid = searchParams.get("txnid");
+  const [donation, setDonation] = useState<DonationData | null>(null);
+  const [loading, setLoading] = useState(!!txnid);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+
+  useEffect(() => {
+    if (!txnid) return;
+
+    fetch(`/api/donation/${txnid}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setDonation(data.data);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [txnid]);
+
+  const handleDownloadReceipt = async () => {
+    if (!donation) return;
+    setReceiptLoading(true);
+    try {
+      // Generate receipt client-side using the donation data
+      const { generateReceiptPDF } = await import("@/lib/receipt");
+      const dataUri = generateReceiptPDF({
+        date: new Date(donation.createdAt).toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        }),
+        txnid: donation.txnid,
+        amount: donation.amount,
+        fullName: donation.donor.fullName,
+        address: "",
+        pan: donation.donor.pan || undefined,
+        aadhaar: donation.donor.aadhaar || undefined,
+        paymentMode: donation.paymentMode,
+        bankRefNum: donation.bankRefNum,
+        digilockerVerified: donation.donor.digilockerVerified,
+      });
+
+      // Download the PDF
+      const link = document.createElement("a");
+      link.href = dataUri;
+      link.download = `donation-receipt-${donation.txnid}.pdf`;
+      link.click();
+    } catch (err) {
+      console.error("Receipt generation failed:", err);
+    } finally {
+      setReceiptLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-cream flex items-center justify-center px-6">
       <motion.div
@@ -46,9 +120,81 @@ export default function DonationSuccess() {
           sacred and timeless.
         </p>
 
+        {/* Transaction Details */}
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-4">
+            <Loader2 className="w-4 h-4 animate-spin text-temple-crimson" />
+            <span className="font-body text-medium text-sm">
+              Loading details...
+            </span>
+          </div>
+        ) : donation ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="bg-warm-white rounded-xl p-5 mb-6 border border-temple-gold-light/20 text-left"
+          >
+            <div className="space-y-2.5">
+              <div className="flex justify-between font-body text-sm">
+                <span className="text-medium">Transaction ID</span>
+                <span className="text-dark font-mono text-xs">
+                  {donation.txnid}
+                </span>
+              </div>
+              <div className="flex justify-between font-body text-sm">
+                <span className="text-medium">Amount</span>
+                <span className="text-dark font-semibold">
+                  {formatCurrency(donation.amount)}
+                </span>
+              </div>
+              <div className="flex justify-between font-body text-sm">
+                <span className="text-medium">Payment Mode</span>
+                <span className="text-dark">{donation.paymentMode || "Online"}</span>
+              </div>
+              <div className="flex justify-between font-body text-sm">
+                <span className="text-medium">Date</span>
+                <span className="text-dark">
+                  {new Date(donation.createdAt).toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </span>
+              </div>
+              {donation.donor.digilockerVerified && (
+                <div className="flex justify-between font-body text-sm">
+                  <span className="text-medium">Identity</span>
+                  <span className="text-green-600 font-semibold text-xs">
+                    DigiLocker Verified
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Download Receipt Button */}
+            <button
+              onClick={handleDownloadReceipt}
+              disabled={receiptLoading}
+              className="w-full mt-4 bg-temple-crimson/10 text-temple-crimson font-body font-semibold text-sm py-2.5 rounded-lg hover:bg-temple-crimson/20 transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {receiptLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Download Receipt (PDF)
+                </>
+              )}
+            </button>
+          </motion.div>
+        ) : null}
+
         <p className="font-body text-medium text-sm leading-relaxed mb-8">
-          A confirmation receipt will be sent to your email shortly. Your
-          donation is eligible for tax benefits under Section 80G.
+          Your donation is eligible for tax benefits under Section 80G.
         </p>
 
         <Link
@@ -59,5 +205,19 @@ export default function DonationSuccess() {
         </Link>
       </motion.div>
     </div>
+  );
+}
+
+export default function DonationSuccess() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-cream flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-temple-crimson" />
+        </div>
+      }
+    >
+      <SuccessContent />
+    </Suspense>
   );
 }

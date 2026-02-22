@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { upsertDonor, createDonation } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,6 +14,12 @@ export async function POST(request: NextRequest) {
       pan,
       aadhaar,
       anonymous,
+      digilockerVerified,
+      digilockerId,
+      panDocUrl,
+      aadhaarDocUrl,
+      dateOfBirth,
+      gender,
     } = body;
 
     const key = process.env.EASEBUZZ_KEY;
@@ -31,7 +38,31 @@ export async function POST(request: NextRequest) {
 
     const productinfo = "Rishihood Mandir Donation";
 
-    // Easebuzz hash: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
+    // --- Save donor and donation to database ---
+    const donor = await upsertDonor({
+      fullName: firstname,
+      email,
+      phone,
+      address: address || "",
+      pan: pan || undefined,
+      aadhaarMasked: aadhaar || undefined,
+      dateOfBirth: dateOfBirth || undefined,
+      gender: gender || undefined,
+      digilockerVerified: digilockerVerified || false,
+      digilockerId: digilockerId || undefined,
+      panDocUrl: panDocUrl || undefined,
+      aadhaarDocUrl: aadhaarDocUrl || undefined,
+    });
+
+    await createDonation({
+      donorId: donor.id,
+      txnid,
+      amount: parseFloat(amount),
+      anonymous: anonymous || false,
+    });
+
+    // --- Easebuzz hash generation ---
+    // key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
     // udf1 = phone, udf2 = address, udf3 = pan, udf4 = aadhaar, udf5 = anonymous
     const hashString = `${key}|${txnid}|${parseFloat(amount).toFixed(1)}|${productinfo}|${firstname}|${email}|${phone || ""}|${address || ""}|${pan || ""}|${aadhaar || ""}|${anonymous ? "1" : "0"}||||||${salt}`;
 
@@ -47,6 +78,7 @@ export async function POST(request: NextRequest) {
         ? "https://pay.easebuzz.in/payment/initiateLink"
         : "https://testpay.easebuzz.in/payment/initiateLink";
 
+    // surl and furl now point to the callback handler
     const params = new URLSearchParams({
       key,
       txnid,
@@ -60,8 +92,8 @@ export async function POST(request: NextRequest) {
       udf3: pan || "",
       udf4: aadhaar || "",
       udf5: anonymous ? "1" : "0",
-      surl: `${origin}/donation/success`,
-      furl: `${origin}/donation/failed`,
+      surl: `${origin}/api/payment/callback`,
+      furl: `${origin}/api/payment/callback`,
       hash,
     });
 

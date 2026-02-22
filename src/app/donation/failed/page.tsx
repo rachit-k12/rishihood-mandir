@@ -1,10 +1,15 @@
 "use client";
 
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { XCircle } from "lucide-react";
+import { XCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 
-export default function DonationFailed() {
+function FailedContent() {
+  const searchParams = useSearchParams();
+  const txnid = searchParams.get("txnid");
+
   return (
     <div className="min-h-screen bg-cream flex items-center justify-center px-6">
       <motion.div
@@ -30,6 +35,12 @@ export default function DonationFailed() {
           We&apos;re sorry, but your payment could not be processed. No amount
           has been deducted from your account.
         </p>
+
+        {txnid && (
+          <p className="font-body text-medium text-xs mb-4 font-mono">
+            Reference: {txnid}
+          </p>
+        )}
 
         <p className="font-body text-medium text-sm leading-relaxed mb-8">
           Please try again or contact us at{" "}
@@ -58,5 +69,19 @@ export default function DonationFailed() {
         </div>
       </motion.div>
     </div>
+  );
+}
+
+export default function DonationFailed() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-cream flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-temple-crimson" />
+        </div>
+      }
+    >
+      <FailedContent />
+    </Suspense>
   );
 }
