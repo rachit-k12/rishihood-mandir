@@ -8,6 +8,18 @@ const CLIENT_ID = () => process.env.DIGILOCKER_CLIENT_ID!;
 const CLIENT_SECRET = () => process.env.DIGILOCKER_CLIENT_SECRET!;
 const REDIRECT_URI = () => process.env.DIGILOCKER_REDIRECT_URI!;
 
+const STATE_MAX_AGE_SECONDS = 600;
+
+function getStateSecret(): string {
+  const secret = process.env.DIGILOCKER_STATE_SECRET || CLIENT_SECRET();
+  if (!secret) {
+    throw new Error(
+      "DigiLocker state secret is not configured. Set DIGILOCKER_STATE_SECRET or DIGILOCKER_CLIENT_SECRET"
+    );
+  }
+  return secret;
+}
+
 // --- PKCE (Proof Key for Code Exchange) with S256 ---
 
 /**
@@ -22,6 +34,60 @@ export function generateCodeVerifier(): string {
  */
 export function generateCodeChallenge(verifier: string): string {
   return crypto.createHash("sha256").update(verifier).digest("base64url");
+}
+
+export function generateSignedState(): string {
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const nonce = crypto.randomBytes(16).toString("base64url");
+  const payload = `${ts}.${nonce}`;
+  const signature = crypto
+    .createHmac("sha256", getStateSecret())
+    .update(payload)
+    .digest("base64url");
+
+  return `${payload}.${signature}`;
+}
+
+export function deriveCodeVerifierFromState(state: string): string {
+  const [ts, nonce] = state.split(".");
+  return crypto
+    .createHmac("sha256", getStateSecret())
+    .update(`pkce.${ts}.${nonce}`)
+    .digest("base64url");
+}
+
+export function validateSignedState(state: string): boolean {
+  const parts = state.split(".");
+  if (parts.length !== 3) {
+    return false;
+  }
+
+  const [ts, nonce, signature] = parts;
+  const timestamp = Number(ts);
+
+  if (!Number.isFinite(timestamp)) {
+    return false;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  if (timestamp > now + 60 || now - timestamp > STATE_MAX_AGE_SECONDS) {
+    return false;
+  }
+
+  const payload = `${ts}.${nonce}`;
+  const expectedSignature = crypto
+    .createHmac("sha256", getStateSecret())
+    .update(payload)
+    .digest("base64url");
+
+  const provided = Buffer.from(signature);
+  const expected = Buffer.from(expectedSignature);
+
+  if (provided.length !== expected.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(provided, expected);
 }
 
 // --- OAuth2 Authorization Code Flow ---

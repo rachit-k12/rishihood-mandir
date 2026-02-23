@@ -3,6 +3,8 @@ import {
   exchangeCodeForToken,
   fetchIssuedDocuments,
   extractDonorData,
+  validateSignedState,
+  deriveCodeVerifierFromState,
 } from "@/lib/digilocker";
 
 export async function GET(request: NextRequest) {
@@ -29,17 +31,24 @@ export async function GET(request: NextRequest) {
 
     // Validate CSRF state
     const storedState = request.cookies.get("digilocker_state")?.value;
-    if (!storedState || storedState !== state) {
+    const isCookieStateValid = !!storedState && storedState === state;
+    const isSignedStateValid = validateSignedState(state);
+
+    if (!isCookieStateValid && !isSignedStateValid) {
       return NextResponse.json(
         { success: false, error: "Invalid state parameter" },
         { status: 403 }
       );
     }
 
-    // Retrieve PKCE code_verifier from cookie
-    const codeVerifier = request.cookies.get(
+    // Retrieve PKCE code_verifier from cookie, fallback to deterministic derivation from signed state
+    let codeVerifier = request.cookies.get(
       "digilocker_code_verifier"
     )?.value;
+    if (!codeVerifier && isSignedStateValid) {
+      codeVerifier = deriveCodeVerifierFromState(state);
+    }
+
     if (!codeVerifier) {
       return NextResponse.json(
         { success: false, error: "Missing PKCE code verifier" },

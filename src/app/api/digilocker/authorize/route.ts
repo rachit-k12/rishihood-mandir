@@ -1,12 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
+import { NextResponse } from "next/server";
 import {
   getAuthorizationUrl,
-  generateCodeVerifier,
+  generateSignedState,
+  deriveCodeVerifierFromState,
   generateCodeChallenge,
 } from "@/lib/digilocker";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     if (!process.env.DIGILOCKER_CLIENT_ID) {
       return NextResponse.json(
@@ -15,11 +15,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Generate CSRF state token
-    const state = crypto.randomBytes(16).toString("hex");
-
-    // Generate PKCE pair (S256)
-    const codeVerifier = generateCodeVerifier();
+    // Generate signed CSRF state token + deterministic PKCE verifier
+    const state = generateSignedState();
+    const codeVerifier = deriveCodeVerifierFromState(state);
     const codeChallenge = generateCodeChallenge(codeVerifier);
 
     const authUrl = getAuthorizationUrl(state, codeChallenge);
