@@ -9,6 +9,21 @@ import Link from "next/link";
 function FailedContent() {
   const searchParams = useSearchParams();
   const txnid = searchParams.get("txnid");
+  const status = (searchParams.get("status") || "failure").toLowerCase();
+  const reason = searchParams.get("reason");
+
+  const isCancelled = status === "cancelled";
+  const title = isCancelled ? "Payment Cancelled" : "Payment Unsuccessful";
+  const description = isCancelled
+    ? "Your payment was cancelled before completion. No amount has been deducted from your account."
+    : "We\'re sorry, but your payment could not be processed. No amount has been deducted from your account.";
+
+  const reasonText =
+    reason === "hash_mismatch"
+      ? "We could not verify the payment response from the gateway."
+      : reason === "missing_txnid"
+        ? "We did not receive a valid transaction reference from the gateway."
+        : null;
 
   return (
     <div className="min-h-screen bg-cream flex items-center justify-center px-6">
@@ -28,13 +43,16 @@ function FailedContent() {
         </motion.div>
 
         <h1 className="font-heading text-temple-crimson text-3xl md:text-4xl font-bold mb-4">
-          Payment Unsuccessful
+          {title}
         </h1>
 
         <p className="font-body text-dark text-base md:text-lg leading-relaxed mb-4">
-          We&apos;re sorry, but your payment could not be processed. No amount
-          has been deducted from your account.
+          {description}
         </p>
+
+        {reasonText && (
+          <p className="font-body text-medium text-sm mb-4">{reasonText}</p>
+        )}
 
         {txnid && (
           <p className="font-body text-medium text-xs mb-4 font-mono">
