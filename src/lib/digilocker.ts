@@ -100,7 +100,6 @@ export function getAuthorizationUrl(
     client_id: CLIENT_ID(),
     redirect_uri: REDIRECT_URI(),
     state,
-    scope: "openid",
     code_challenge: codeChallenge,
     code_challenge_method: "S256",
   });
