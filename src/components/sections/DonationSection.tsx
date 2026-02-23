@@ -42,6 +42,8 @@ const slideVariants = {
 
 interface DigiLockerData {
   fullName?: string;
+  email?: string;
+  phone?: string;
   dateOfBirth?: string;
   gender?: string;
   address?: string;
@@ -102,6 +104,8 @@ function DonationSectionInner() {
         const decoded: DigiLockerData = JSON.parse(atob(encodedData));
         setDigilockerData(decoded);
         setFullName(decoded.fullName || "");
+        if (decoded.email) setEmail(decoded.email);
+        if (decoded.phone) setPhone(decoded.phone.replace(/^\+91/, "").replace(/\D/g, "").slice(-10));
         // Auto-advance to step 2
         setStep(2);
         setDirection(1);
@@ -449,26 +453,41 @@ function DonationSectionInner() {
                         )}
                       </div>
                       <div>
-                        <label className="font-body text-dark text-xs font-medium mb-1 block">
+                        <label className="font-body text-dark text-xs font-medium mb-1 flex items-center gap-1.5">
                           Email{" "}
                           <span className="text-temple-red">*</span>
+                          {digilockerData?.email && (
+                            <span className="text-temple-gold text-[10px] font-semibold bg-temple-gold/10 px-1.5 py-0.5 rounded">
+                              DigiLocker
+                            </span>
+                          )}
                         </label>
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={(e) => {
-                            setEmail(e.target.value);
-                            if (errors.email) {
-                              setErrors((prev) => {
-                                const n = { ...prev };
-                                delete n.email;
-                                return n;
-                              });
+                        <div className="relative">
+                          {digilockerData?.email && (
+                            <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-temple-gold" />
+                          )}
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => {
+                              setEmail(e.target.value);
+                              if (errors.email) {
+                                setErrors((prev) => {
+                                  const n = { ...prev };
+                                  delete n.email;
+                                  return n;
+                                });
+                              }
+                            }}
+                            readOnly={!!digilockerData?.email}
+                            className={
+                              digilockerData?.email
+                                ? verifiedInputClass
+                                : inputClass
                             }
-                          }}
-                          className={inputClass}
-                          placeholder="you@example.com"
-                        />
+                            placeholder="you@example.com"
+                          />
+                        </div>
                         {errors.email && (
                           <p className="text-temple-red text-xs mt-0.5 font-body">
                             {errors.email}
@@ -480,14 +499,23 @@ function DonationSectionInner() {
                     {/* Row 2: Phone + PAN (read-only) */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <label className="font-body text-dark text-xs font-medium mb-1 block">
+                        <label className="font-body text-dark text-xs font-medium mb-1 flex items-center gap-1.5">
                           Phone (+91){" "}
                           <span className="text-temple-red">*</span>
+                          {digilockerData?.phone && (
+                            <span className="text-temple-gold text-[10px] font-semibold bg-temple-gold/10 px-1.5 py-0.5 rounded">
+                              DigiLocker
+                            </span>
+                          )}
                         </label>
                         <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 font-body text-medium text-xs">
-                            +91
-                          </span>
+                          {digilockerData?.phone ? (
+                            <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-temple-gold" />
+                          ) : (
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-body text-medium text-xs">
+                              +91
+                            </span>
+                          )}
                           <input
                             type="tel"
                             inputMode="numeric"
@@ -505,7 +533,12 @@ function DonationSectionInner() {
                                 });
                               }
                             }}
-                            className={`${inputClass} pl-10`}
+                            readOnly={!!digilockerData?.phone}
+                            className={
+                              digilockerData?.phone
+                                ? verifiedInputClass
+                                : `${inputClass} pl-10`
+                            }
                             placeholder="9876543210"
                           />
                         </div>

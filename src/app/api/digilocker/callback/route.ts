@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   exchangeCodeForToken,
-  fetchIssuedDocuments,
-  extractDonorData,
+  aggregateDonorData,
   validateSignedState,
   deriveCodeVerifierFromState,
 } from "@/lib/digilocker";
@@ -57,44 +56,32 @@ export async function GET(request: NextRequest) {
     }
 
     // Exchange code for access token (with PKCE code_verifier)
+    // With scope=openid, this also returns an id_token JWT
     const tokenData = await exchangeCodeForToken(code, codeVerifier);
     const accessToken = tokenData.access_token;
 
-    // Fetch issued documents (contains Aadhaar data)
-    const issuedDocs = await fetchIssuedDocuments(accessToken);
+    console.log(
+      "DigiLocker token response keys:",
+      Object.keys(tokenData),
+      "has id_token:",
+      !!tokenData.id_token
+    );
 
-    // Extract donor data from DigiLocker response
-    let donorData = {
-      fullName: "",
-      dateOfBirth: "",
-      gender: "",
-      address: "",
-      aadhaarMasked: "",
-      pan: "",
-      digilockerId: "",
-      panDocUrl: "",
-      aadhaarDocUrl: "",
-    };
+    // Aggregate donor data from all sources:
+    // 1. id_token JWT (name, email, phone, PAN, masked Aadhaar)
+    // 2. /user endpoint (name, DOB, gender)
+    // 3. /files/issued (document URIs → PAN/Aadhaar numbers)
+    // 4. eAadhaar XML document (address, full demographic data)
+    const donorData = await aggregateDonorData(tokenData, accessToken);
 
-    if (issuedDocs) {
-      const aadhaarData = issuedDocs.aadhaar || issuedDocs;
-      const extracted = extractDonorData(aadhaarData);
-      donorData = { ...donorData, ...extracted };
-
-      // Check for PAN in issued documents
-      if (issuedDocs.items) {
-        const panDoc = issuedDocs.items.find(
-          (doc: { type?: string; doctype?: string }) =>
-            doc.type === "PANCR" || doc.doctype === "PANCR"
-        );
-        if (panDoc) {
-          donorData.pan = panDoc.number || panDoc.id || "";
-          donorData.panDocUrl = panDoc.uri || "";
-        }
-      }
-
-      donorData.digilockerId = issuedDocs.digilockerId || "";
-    }
+    console.log("DigiLocker aggregated donor data:", {
+      hasName: !!donorData.fullName,
+      hasEmail: !!donorData.email,
+      hasPhone: !!donorData.phone,
+      hasPan: !!donorData.pan,
+      hasAadhaar: !!donorData.aadhaarMasked,
+      hasAddress: !!donorData.address,
+    });
 
     // Encode the data and redirect back to donation page
     const encodedData = Buffer.from(JSON.stringify(donorData)).toString(
@@ -115,7 +102,7 @@ export async function GET(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 3600, // 1 hour
+      maxAge: 3600,
       path: "/",
     });
 

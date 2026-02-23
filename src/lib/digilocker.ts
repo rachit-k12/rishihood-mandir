@@ -22,16 +22,10 @@ function getStateSecret(): string {
 
 // --- PKCE (Proof Key for Code Exchange) with S256 ---
 
-/**
- * Generate a cryptographically random code_verifier for PKCE.
- */
 export function generateCodeVerifier(): string {
   return crypto.randomBytes(32).toString("base64url");
 }
 
-/**
- * Generate code_challenge from code_verifier using SHA-256 (S256 method).
- */
 export function generateCodeChallenge(verifier: string): string {
   return crypto.createHash("sha256").update(verifier).digest("base64url");
 }
@@ -90,12 +84,12 @@ export function validateSignedState(state: string): boolean {
   return crypto.timingSafeEqual(provided, expected);
 }
 
-// --- OAuth2 Authorization Code Flow ---
+// --- OAuth2 Authorization Code Flow with OpenID Connect ---
 
 /**
- * Build the DigiLocker OAuth2 authorization URL with PKCE.
- * @param state - CSRF token for validation on callback
- * @param codeChallenge - SHA-256 hash of the code_verifier
+ * Build the DigiLocker OAuth2 authorization URL with PKCE and OpenID Connect.
+ * scope=openid ensures the token response includes an id_token JWT
+ * with user data (name, email, phone, PAN, masked Aadhaar).
  */
 export function getAuthorizationUrl(
   state: string,
@@ -106,20 +100,29 @@ export function getAuthorizationUrl(
     client_id: CLIENT_ID(),
     redirect_uri: REDIRECT_URI(),
     state,
+    scope: "openid",
     code_challenge: codeChallenge,
     code_challenge_method: "S256",
   });
   return `${BASE_URL}/authorize?${params.toString()}`;
 }
 
+// Token response type (includes optional id_token from OpenID Connect)
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  id_token?: string;
+}
+
 /**
  * Exchange the authorization code for an access token.
- * Includes code_verifier for PKCE validation.
+ * With scope=openid, the response includes an id_token JWT.
  */
 export async function exchangeCodeForToken(
   code: string,
   codeVerifier: string
-): Promise<{ access_token: string; token_type: string; expires_in: number }> {
+): Promise<TokenResponse> {
   const response = await fetch(`${BASE_URL}/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -139,6 +142,74 @@ export async function exchangeCodeForToken(
   }
 
   return response.json();
+}
+
+// --- ID Token Decoding ---
+
+export interface IdTokenClaims {
+  given_name?: string;
+  name?: string;
+  preferred_username?: string;
+  email?: string;
+  phone_number?: string;
+  birthdate?: string;
+  dob?: string;
+  gender?: string;
+  pan_number?: string;
+  masked_aadhaar?: string;
+  user_sso_id?: string;
+  digilockerid?: string;
+  sub?: string;
+}
+
+/**
+ * Decode the id_token JWT payload (no signature verification needed since
+ * it came directly from DigiLocker over HTTPS in the token response).
+ */
+export function decodeIdToken(idToken: string): IdTokenClaims | null {
+  try {
+    const parts = idToken.split(".");
+    if (parts.length !== 3) return null;
+    const payload = Buffer.from(parts[1], "base64url").toString("utf-8");
+    return JSON.parse(payload);
+  } catch {
+    console.error("Failed to decode DigiLocker id_token");
+    return null;
+  }
+}
+
+// --- User Profile ---
+
+export interface UserProfile {
+  digilockerid?: string;
+  name?: string;
+  dob?: string;
+  gender?: string;
+  eaadhaar?: string;
+  reference_key?: string;
+}
+
+/**
+ * Fetch user profile from DigiLocker /user endpoint.
+ */
+export async function fetchUserProfile(
+  accessToken: string
+): Promise<UserProfile | null> {
+  try {
+    const response = await fetch(`${BASE_URL}/user`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!response.ok) {
+      console.error("DigiLocker /user failed:", await response.text());
+      return null;
+    }
+
+    return response.json();
+  } catch (err) {
+    console.error("DigiLocker /user error:", err);
+    return null;
+  }
 }
 
 // --- Document Fetching ---
@@ -185,12 +256,335 @@ export async function fetchDocument(
   return { buffer: Buffer.from(arrayBuffer), contentType };
 }
 
-// --- Data Extraction ---
+// --- eAadhaar XML Parsing ---
 
 /**
- * Extracts relevant donor data from DigiLocker Aadhaar response.
- * Normalizes the data into our application format.
+ * Fetch eAadhaar XML and parse for demographic data.
+ * Tries the v3 endpoint first, falls back to fetching via document URI.
  */
+export async function fetchEaadhaarData(
+  accessToken: string,
+  aadhaarUri?: string
+): Promise<{
+  name: string;
+  dob: string;
+  gender: string;
+  address: string;
+  maskedAadhaar: string;
+} | null> {
+  try {
+    // Try fetching eAadhaar XML via the document URI
+    let xmlText: string | null = null;
+
+    if (aadhaarUri) {
+      try {
+        const { buffer, contentType } = await fetchDocument(
+          accessToken,
+          aadhaarUri
+        );
+        if (contentType.includes("xml")) {
+          xmlText = buffer.toString("utf-8");
+        }
+      } catch (err) {
+        console.error("eAadhaar document fetch failed:", err);
+      }
+    }
+
+    // Also try the dedicated eAadhaar endpoint
+    if (!xmlText) {
+      try {
+        // Try v3 endpoint for eAadhaar
+        const baseOrigin = BASE_URL.replace(/\/oauth2\/\d+$/, "");
+        const response = await fetch(`${baseOrigin}/oauth2/3/xml/eaadhaar`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (response.ok) {
+          xmlText = await response.text();
+        }
+      } catch {
+        // Silently fail — this endpoint may not be available
+      }
+    }
+
+    if (!xmlText) return null;
+
+    return parseEaadhaarXml(xmlText);
+  } catch (err) {
+    console.error("eAadhaar data fetch error:", err);
+    return null;
+  }
+}
+
+/**
+ * Parse eAadhaar XML to extract demographic data.
+ * Handles both the KycRes format and the PrintLetterBitmapBytes format.
+ */
+function parseEaadhaarXml(xml: string): {
+  name: string;
+  dob: string;
+  gender: string;
+  address: string;
+  maskedAadhaar: string;
+} | null {
+  try {
+    // Try KycRes format: <Poi name="..." dob="..." gender="..." />
+    const poiMatch = xml.match(/<Poi\s+([^>]+)\/?>/i);
+    const poaMatch = xml.match(/<Poa\s+([^>]+)\/?>/i);
+    const uidMatch = xml.match(/uid="([^"]+)"/i);
+
+    if (poiMatch) {
+      const poiAttrs = poiMatch[1];
+      const name = extractAttr(poiAttrs, "name") || "";
+      const dob = extractAttr(poiAttrs, "dob") || "";
+      const gender = extractAttr(poiAttrs, "gender") || "";
+
+      let address = "";
+      if (poaMatch) {
+        const poaAttrs = poaMatch[1];
+        const addrParts = [
+          extractAttr(poaAttrs, "co"),
+          extractAttr(poaAttrs, "house"),
+          extractAttr(poaAttrs, "street"),
+          extractAttr(poaAttrs, "lm"),
+          extractAttr(poaAttrs, "loc"),
+          extractAttr(poaAttrs, "vtc"),
+          extractAttr(poaAttrs, "subdist"),
+          extractAttr(poaAttrs, "dist"),
+          extractAttr(poaAttrs, "state"),
+          extractAttr(poaAttrs, "pc"),
+        ].filter(Boolean);
+        address = addrParts.join(", ");
+      }
+
+      const maskedAadhaar = uidMatch?.[1]?.replace(/\s+/g, "") || "";
+
+      return { name, dob, gender, address, maskedAadhaar };
+    }
+
+    // Try PrintLetterBitmapBytes format
+    const nameMatch = xml.match(/<name>([^<]+)<\/name>/i);
+    const dobMatch = xml.match(/<dob>([^<]+)<\/dob>/i);
+    const genderMatch = xml.match(/<gender>([^<]+)<\/gender>/i);
+    const uidAttrMatch = xml.match(/uid="([^"]+)"/i);
+
+    if (nameMatch) {
+      return {
+        name: nameMatch[1] || "",
+        dob: dobMatch?.[1] || "",
+        gender: genderMatch?.[1] || "",
+        address: "",
+        maskedAadhaar: uidAttrMatch?.[1]?.replace(/\s+/g, "") || "",
+      };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function extractAttr(attrString: string, name: string): string {
+  const match = attrString.match(new RegExp(`${name}="([^"]*)"`, "i"));
+  return match?.[1] || "";
+}
+
+// --- Document Number Extraction from URIs ---
+
+interface IssuedDocument {
+  name?: string;
+  type?: string;
+  doctype?: string;
+  uri?: string;
+  issuerid?: string;
+  issuer?: string;
+  mime?: string | string[];
+  date?: string;
+  description?: string;
+  number?: string;
+  id?: string;
+}
+
+/**
+ * Extract PAN and Aadhaar numbers from the issued documents list.
+ * Document URIs follow the format: {issuerid}-{doctype}-{identifier}
+ * The identifier is often the actual document number.
+ */
+export function extractFromIssuedDocs(issuedDocs: {
+  items?: IssuedDocument[];
+}): {
+  pan: string;
+  panDocUrl: string;
+  aadhaarNumber: string;
+  aadhaarDocUrl: string;
+  digilockerId: string;
+} {
+  const result = {
+    pan: "",
+    panDocUrl: "",
+    aadhaarNumber: "",
+    aadhaarDocUrl: "",
+    digilockerId: (issuedDocs as { digilockerid?: string }).digilockerid || "",
+  };
+
+  const items = issuedDocs?.items || [];
+
+  for (const doc of items) {
+    const docType = doc.type || doc.doctype || "";
+    const uri = doc.uri || "";
+
+    if (docType === "PANCR" || docType === "PCARD") {
+      // Extract PAN number from URI: in.gov.cbdt-PANCR-ABCDE1234F
+      result.pan = doc.number || doc.id || extractNumberFromUri(uri) || "";
+      result.panDocUrl = uri;
+    }
+
+    if (docType === "ADHAR" || docType === "AADHAAR") {
+      // Extract Aadhaar from URI: in.gov.uidai-ADHAR-XXXXXXXXXXXX
+      result.aadhaarNumber =
+        doc.number || doc.id || extractNumberFromUri(uri) || "";
+      result.aadhaarDocUrl = uri;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Extract the document number from a DigiLocker document URI.
+ * URI format: {issuerid}-{doctype}-{number}
+ * e.g., in.gov.uidai-ADHAR-123456789012
+ */
+function extractNumberFromUri(uri: string): string {
+  if (!uri) return "";
+  // Split by '-' and take everything after the doctype
+  const parts = uri.split("-");
+  if (parts.length >= 3) {
+    // The number is everything after the second '-'
+    return parts.slice(2).join("-");
+  }
+  return "";
+}
+
+// --- Aggregated Data Extraction ---
+
+export interface DigiLockerDonorData {
+  fullName: string;
+  email: string;
+  phone: string;
+  dateOfBirth: string;
+  gender: string;
+  address: string;
+  aadhaarMasked: string;
+  pan: string;
+  digilockerId: string;
+  panDocUrl: string;
+  aadhaarDocUrl: string;
+}
+
+/**
+ * Aggregate donor data from all available DigiLocker sources.
+ * Priority: id_token > user profile > eAadhaar XML > issued doc URIs
+ */
+export async function aggregateDonorData(
+  tokenResponse: TokenResponse,
+  accessToken: string
+): Promise<DigiLockerDonorData> {
+  const data: DigiLockerDonorData = {
+    fullName: "",
+    email: "",
+    phone: "",
+    dateOfBirth: "",
+    gender: "",
+    address: "",
+    aadhaarMasked: "",
+    pan: "",
+    digilockerId: "",
+    panDocUrl: "",
+    aadhaarDocUrl: "",
+  };
+
+  // 1. Decode id_token (best source — has name, email, phone, PAN, Aadhaar)
+  if (tokenResponse.id_token) {
+    const claims = decodeIdToken(tokenResponse.id_token);
+    if (claims) {
+      console.log("DigiLocker id_token claims keys:", Object.keys(claims));
+      data.fullName = claims.given_name || claims.name || "";
+      data.email = claims.email || "";
+      data.phone = claims.phone_number || "";
+      data.dateOfBirth = claims.birthdate || claims.dob || "";
+      data.pan = claims.pan_number || "";
+      data.aadhaarMasked = claims.masked_aadhaar || "";
+      data.digilockerId =
+        claims.digilockerid ||
+        claims.preferred_username ||
+        claims.sub ||
+        "";
+    }
+  }
+
+  // 2. Fetch user profile (fills in name, DOB, gender if not in id_token)
+  const userProfile = await fetchUserProfile(accessToken);
+  if (userProfile) {
+    console.log("DigiLocker /user response keys:", Object.keys(userProfile));
+    if (!data.fullName) data.fullName = userProfile.name || "";
+    if (!data.dateOfBirth) data.dateOfBirth = userProfile.dob || "";
+    if (!data.gender) data.gender = userProfile.gender || "";
+    if (!data.digilockerId)
+      data.digilockerId = userProfile.digilockerid || "";
+  }
+
+  // 3. Fetch issued documents (for PAN/Aadhaar numbers from URIs)
+  let issuedDocs: { items?: IssuedDocument[] } | null = null;
+  try {
+    issuedDocs = await fetchIssuedDocuments(accessToken);
+    console.log(
+      "DigiLocker issued docs:",
+      JSON.stringify(issuedDocs, null, 2).substring(0, 500)
+    );
+  } catch (err) {
+    console.error("Failed to fetch issued docs:", err);
+  }
+
+  if (issuedDocs) {
+    const docData = extractFromIssuedDocs(issuedDocs);
+    if (!data.pan && docData.pan) data.pan = docData.pan;
+    if (!data.aadhaarMasked && docData.aadhaarNumber)
+      data.aadhaarMasked = docData.aadhaarNumber;
+    data.panDocUrl = docData.panDocUrl;
+    data.aadhaarDocUrl = docData.aadhaarDocUrl;
+    if (!data.digilockerId && docData.digilockerId)
+      data.digilockerId = docData.digilockerId;
+
+    // 4. Try to fetch eAadhaar XML for address data
+    if (!data.address || !data.fullName) {
+      const aadhaarData = await fetchEaadhaarData(
+        accessToken,
+        docData.aadhaarDocUrl
+      );
+      if (aadhaarData) {
+        if (!data.fullName) data.fullName = aadhaarData.name;
+        if (!data.dateOfBirth) data.dateOfBirth = aadhaarData.dob;
+        if (!data.gender) data.gender = aadhaarData.gender;
+        if (!data.address) data.address = aadhaarData.address;
+        if (!data.aadhaarMasked)
+          data.aadhaarMasked = aadhaarData.maskedAadhaar;
+      }
+    }
+  }
+
+  // Mask Aadhaar for display (show last 4 digits only)
+  if (data.aadhaarMasked && data.aadhaarMasked.length >= 8) {
+    const clean = data.aadhaarMasked.replace(/[\s-]/g, "");
+    if (/^\d{12}$/.test(clean)) {
+      data.aadhaarMasked = `XXXX XXXX ${clean.slice(-4)}`;
+    }
+  }
+
+  return data;
+}
+
+// Legacy exports for backwards compatibility
+export { extractNumberFromUri };
 export function extractDonorData(aadhaarData: {
   name?: string;
   dob?: string;
@@ -207,7 +601,6 @@ export function extractDonorData(aadhaarData: {
     careOf?: string;
   };
   maskedNumber?: string;
-  photo?: string;
 }) {
   const addr = aadhaarData.address || {};
   const addressParts = [

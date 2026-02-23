@@ -155,7 +155,7 @@ function SuccessContent() {
           className="relative mx-auto max-w-xl"
         >
           {/* Vintage scroll background */}
-          <div className="absolute -inset-y-8 -inset-x-16 md:-inset-y-10 md:-inset-x-20">
+          <div className="absolute -inset-y-16 -inset-x-12 md:-inset-y-20 md:-inset-x-24">
             <Image
               src="/assets/vintage-scroll.png"
               alt=""
@@ -166,7 +166,7 @@ function SuccessContent() {
           </div>
 
           {/* Content on the scroll */}
-          <div className="relative z-10 px-6 md:px-16 py-10 md:py-14">
+          <div className="relative z-10 px-4 md:px-14 py-12 md:py-16">
             {/* Acknowledgement Title */}
             <h2 className="font-letter italic font-bold text-ink-sepia text-lg md:text-2xl text-center mb-1">
               Acknowledgement of Donation
@@ -204,9 +204,9 @@ function SuccessContent() {
                   {donationDate}
                 </span>
               </div>
-              <div className="flex justify-between font-letter text-xs md:text-sm">
-                <span className="text-ink-sepia/70 italic">Transaction ID</span>
-                <span className="text-ink-sepia font-bold italic font-mono text-[11px]">
+              <div className="flex justify-between font-letter text-xs md:text-sm gap-2">
+                <span className="text-ink-sepia/70 italic shrink-0">Transaction ID</span>
+                <span className="text-ink-sepia font-bold italic font-mono text-[10px] md:text-[11px] break-all text-right">
                   {donation.txnid}
                 </span>
               </div>
@@ -223,11 +223,11 @@ function SuccessContent() {
                 </span>
               </div>
               {donation.bankRefNum && (
-                <div className="flex justify-between font-letter text-xs md:text-sm">
-                  <span className="text-ink-sepia/70 italic">
+                <div className="flex justify-between font-letter text-xs md:text-sm gap-2">
+                  <span className="text-ink-sepia/70 italic shrink-0">
                     Bank Reference
                   </span>
-                  <span className="text-ink-sepia font-bold italic font-mono text-[11px]">
+                  <span className="text-ink-sepia font-bold italic font-mono text-[10px] md:text-[11px] break-all text-right">
                     {donation.bankRefNum}
                   </span>
                 </div>
