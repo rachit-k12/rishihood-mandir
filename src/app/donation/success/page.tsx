@@ -30,6 +30,7 @@ function SuccessContent() {
   const [donation, setDonation] = useState<DonationData | null>(null);
   const [loading, setLoading] = useState(!!txnid);
   const [receiptLoading, setReceiptLoading] = useState(false);
+  const isDonationSuccess = donation?.status === "success";
 
   useEffect(() => {
     if (!txnid) return;
@@ -107,7 +108,7 @@ function SuccessContent() {
         </motion.div>
 
         <h1 className="font-heading text-temple-crimson text-3xl md:text-4xl font-bold mb-4">
-          Thank You
+          {isDonationSuccess ? "Thank You" : "Payment Status"}
         </h1>
 
         <p className="font-devanagari text-accent-saffron text-lg mb-6">
@@ -115,9 +116,9 @@ function SuccessContent() {
         </p>
 
         <p className="font-body text-dark text-base md:text-lg leading-relaxed mb-4">
-          Your generous contribution to the Shiva Temple at Rishihood
-          University has been received. You have become a part of something
-          sacred and timeless.
+          {isDonationSuccess
+            ? "Your generous contribution to the Shiva Temple at Rishihood University has been received. You have become a part of something sacred and timeless."
+            : "We are checking your transaction status. If your payment did not complete, please use the action below to retry."}
         </p>
 
         {/* Transaction Details */}
@@ -172,30 +173,40 @@ function SuccessContent() {
               )}
             </div>
 
-            {/* Download Receipt Button */}
-            <button
-              onClick={handleDownloadReceipt}
-              disabled={receiptLoading}
-              className="w-full mt-4 bg-temple-crimson/10 text-temple-crimson font-body font-semibold text-sm py-2.5 rounded-lg hover:bg-temple-crimson/20 transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
-            >
-              {receiptLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4" />
-                  Download Receipt (PDF)
-                </>
-              )}
-            </button>
+            {isDonationSuccess ? (
+              <button
+                onClick={handleDownloadReceipt}
+                disabled={receiptLoading}
+                className="w-full mt-4 bg-temple-crimson/10 text-temple-crimson font-body font-semibold text-sm py-2.5 rounded-lg hover:bg-temple-crimson/20 transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {receiptLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Download Receipt (PDF)
+                  </>
+                )}
+              </button>
+            ) : (
+              <Link
+                href={`/donation/failed?txnid=${donation.txnid}&status=${donation.status}`}
+                className="w-full mt-4 bg-temple-crimson/10 text-temple-crimson font-body font-semibold text-sm py-2.5 rounded-lg hover:bg-temple-crimson/20 transition-colors inline-flex items-center justify-center"
+              >
+                View Payment Result
+              </Link>
+            )}
           </motion.div>
         ) : null}
 
-        <p className="font-body text-medium text-sm leading-relaxed mb-8">
-          Your donation is eligible for tax benefits under Section 80G.
-        </p>
+        {isDonationSuccess && (
+          <p className="font-body text-medium text-sm leading-relaxed mb-8">
+            Your donation is eligible for tax benefits under Section 80G.
+          </p>
+        )}
 
         <Link
           href="/"
