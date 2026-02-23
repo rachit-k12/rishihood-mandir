@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Image from "next/image";
+import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 
 export default function Hero() {
@@ -93,17 +94,21 @@ export default function Hero() {
         </motion.p>
 
         {/* CTA Button */}
-        <motion.button
+        <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 1.6 }}
           whileHover={{ scale: 1.04 }}
           whileTap={{ scale: 0.97 }}
-          onClick={() => scrollTo("donation")}
-          className="mt-6 self-start bg-temple-red text-cream font-body font-semibold tracking-[0.15em] text-xs md:text-sm px-8 py-4 rounded-2xl hover:bg-temple-crimson-hover transition-colors cursor-pointer shadow-md"
+          className="mt-6 self-start"
         >
-          CONTRIBUTE NOW
-        </motion.button>
+          <Link
+            href="/donate"
+            className="inline-block bg-temple-red text-cream font-body font-semibold tracking-[0.15em] text-xs md:text-sm px-8 py-4 rounded-2xl hover:bg-temple-crimson-hover transition-colors cursor-pointer shadow-md"
+          >
+            CONTRIBUTE NOW
+          </Link>
+        </motion.div>
       </div>
 
       {/* Scroll Indicator — centered bottom */}

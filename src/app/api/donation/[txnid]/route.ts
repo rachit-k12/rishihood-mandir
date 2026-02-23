@@ -38,6 +38,8 @@ export async function GET(
         donor: {
           fullName: donation.anonymous ? "Anonymous" : donation.donor.fullName,
           email: donation.donor.email,
+          phone: donation.donor.phone,
+          address: donation.donor.address,
           pan: donation.donor.pan
             ? `${donation.donor.pan.substring(0, 2)}****${donation.donor.pan.substring(8)}`
             : null,

@@ -73,7 +73,7 @@ function FailedContent() {
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link
-            href="/#donation"
+            href="/donate"
             className="inline-block bg-temple-red text-cream font-body font-semibold tracking-wider text-sm px-8 py-3 rounded-lg hover:bg-temple-crimson-hover transition-colors"
           >
             Try Again

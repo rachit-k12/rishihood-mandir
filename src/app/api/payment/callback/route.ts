@@ -17,6 +17,12 @@ type CallbackPayload = {
   udf3: string;
   udf4: string;
   udf5: string;
+  udf6: string;
+  udf7: string;
+  udf8: string;
+  udf9: string;
+  udf10: string;
+  additionalCharges: string;
   mode: string;
   bankRefNum: string;
 };
@@ -52,6 +58,12 @@ function parsePayloadFromSearchParams(searchParams: URLSearchParams): CallbackPa
     udf3: searchParams.get("udf3") || "",
     udf4: searchParams.get("udf4") || "",
     udf5: searchParams.get("udf5") || "",
+    udf6: searchParams.get("udf6") || "",
+    udf7: searchParams.get("udf7") || "",
+    udf8: searchParams.get("udf8") || "",
+    udf9: searchParams.get("udf9") || "",
+    udf10: searchParams.get("udf10") || "",
+    additionalCharges: searchParams.get("additionalCharges") || "",
     mode: searchParams.get("mode") || "",
     bankRefNum: searchParams.get("bank_ref_num") || "",
   };
@@ -63,11 +75,24 @@ function verifyHash(payload: CallbackPayload): boolean {
     return false;
   }
 
-  const reverseHashString = `${salt}|${payload.status}||||||${payload.udf5}|${payload.udf4}|${payload.udf3}|${payload.udf2}|${payload.udf1}|${payload.email}|${payload.firstname}|${payload.productinfo}|${payload.amount}|${payload.txnid}|${payload.key}`;
+  // Reverse hash: SALT|status|udf10|udf9|udf8|udf7|udf6|udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
+  // With additionalCharges: additionalCharges|SALT|status|...|key
+  const baseHashString = `${salt}|${payload.status}|${payload.udf10}|${payload.udf9}|${payload.udf8}|${payload.udf7}|${payload.udf6}|${payload.udf5}|${payload.udf4}|${payload.udf3}|${payload.udf2}|${payload.udf1}|${payload.email}|${payload.firstname}|${payload.productinfo}|${payload.amount}|${payload.txnid}|${payload.key}`;
+  const reverseHashString = payload.additionalCharges
+    ? `${payload.additionalCharges}|${baseHashString}`
+    : baseHashString;
+
   const calculatedHash = crypto
     .createHash("sha512")
     .update(reverseHashString)
     .digest("hex");
+
+  if (calculatedHash !== payload.hash) {
+    console.error("Hash mismatch for txnid:", payload.txnid);
+    console.error("Reverse hash input:", reverseHashString);
+    console.error("Calculated:", calculatedHash);
+    console.error("Received:", payload.hash);
+  }
 
   return calculatedHash === payload.hash;
 }
@@ -159,6 +184,12 @@ export async function POST(request: NextRequest) {
       udf3: (formData.get("udf3") as string) || "",
       udf4: (formData.get("udf4") as string) || "",
       udf5: (formData.get("udf5") as string) || "",
+      udf6: (formData.get("udf6") as string) || "",
+      udf7: (formData.get("udf7") as string) || "",
+      udf8: (formData.get("udf8") as string) || "",
+      udf9: (formData.get("udf9") as string) || "",
+      udf10: (formData.get("udf10") as string) || "",
+      additionalCharges: (formData.get("additionalCharges") as string) || "",
       mode: (formData.get("mode") as string) || "",
       bankRefNum: (formData.get("bank_ref_num") as string) || "",
     };

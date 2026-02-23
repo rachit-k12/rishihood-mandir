@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       const origin = request.nextUrl.origin;
       return NextResponse.redirect(
-        `${origin}/#donation?digilocker_error=${encodeURIComponent(error)}`
+        `${origin}/donate?digilocker_error=${encodeURIComponent(error)}`
       );
     }
 
@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
     );
 
     const origin = request.nextUrl.origin;
-    const redirectUrl = `${origin}/#donation?digilocker_data=${encodedData}`;
+    const redirectUrl = `${origin}/donate?digilocker_data=${encodedData}`;
 
     const response = NextResponse.redirect(redirectUrl);
 
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
     console.error("DigiLocker callback error:", error);
     const origin = request.nextUrl.origin;
     return NextResponse.redirect(
-      `${origin}/#donation?digilocker_error=callback_failed`
+      `${origin}/donate?digilocker_error=callback_failed`
     );
   }
 }

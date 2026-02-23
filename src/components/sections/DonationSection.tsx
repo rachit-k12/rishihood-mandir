@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ShieldCheck, ExternalLink, ArrowRight, ArrowLeft, CheckCircle } from "lucide-react";
+import { Loader2, ShieldCheck, ExternalLink, ArrowRight, ArrowLeft, CheckCircle, Lock } from "lucide-react";
 import MandalaDecoration from "@/components/ui/MandalaDecoration";
 import SectionWrapper from "@/components/ui/SectionWrapper";
 import OrnamentalDivider from "@/components/ui/OrnamentalDivider";
@@ -55,7 +56,9 @@ interface FormErrors {
   [key: string]: string;
 }
 
-export default function DonationSection() {
+function DonationSectionInner() {
+  const searchParams = useSearchParams();
+
   // Step: 1 = DigiLocker auth, 2 = Amount + details + pay
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);
@@ -78,13 +81,22 @@ export default function DonationSection() {
   const donationAmount = selectedAmount || Number(customAmount) || 0;
 
   // Check for DigiLocker callback data on mount
+  // Supports both URL search params (/donate?digilocker_data=...) and hash params (/#donation?digilocker_data=...)
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const hash = window.location.hash;
-    const hashParams = new URLSearchParams(hash.split("?")[1] || "");
+    // Check URL search params first (for /donate route)
+    let encodedData = searchParams.get("digilocker_data");
+    let dlError = searchParams.get("digilocker_error");
 
-    const encodedData = hashParams.get("digilocker_data");
+    // Fallback to hash params (for legacy homepage /#donation?...)
+    if (!encodedData && !dlError) {
+      const hash = window.location.hash;
+      const hashParams = new URLSearchParams(hash.split("?")[1] || "");
+      encodedData = hashParams.get("digilocker_data");
+      dlError = hashParams.get("digilocker_error");
+    }
+
     if (encodedData) {
       try {
         const decoded: DigiLockerData = JSON.parse(atob(encodedData));
@@ -93,22 +105,24 @@ export default function DonationSection() {
         // Auto-advance to step 2
         setStep(2);
         setDirection(1);
-        window.history.replaceState(null, "", "/#donation");
+        // Clean the URL
+        const cleanPath = window.location.pathname === "/donate" ? "/donate" : "/#donation";
+        window.history.replaceState(null, "", cleanPath);
       } catch {
         console.error("Failed to parse DigiLocker data");
       }
     }
 
-    const dlError = hashParams.get("digilocker_error");
     if (dlError) {
       setDigilockerError(
         dlError === "callback_failed"
           ? "DigiLocker verification failed. Please try again."
           : `DigiLocker error: ${dlError}`
       );
-      window.history.replaceState(null, "", "/#donation");
+      const cleanPath = window.location.pathname === "/donate" ? "/donate" : "/#donation";
+      window.history.replaceState(null, "", cleanPath);
     }
-  }, []);
+  }, [searchParams]);
 
   const handleDigiLockerVerify = async () => {
     setDigilockerLoading(true);
@@ -190,7 +204,7 @@ export default function DonationSection() {
     "w-full px-3 py-2.5 rounded-lg border border-temple-gold-muted/70 bg-cream font-body text-dark text-sm placeholder:text-light focus:outline-none focus:border-temple-gold focus:ring-1 focus:ring-temple-gold/50 transition-colors";
 
   const verifiedInputClass =
-    "w-full px-3 py-2.5 rounded-lg border border-green-300 bg-green-50/50 font-body text-dark text-sm cursor-not-allowed";
+    "w-full pl-8 pr-3 py-2.5 rounded-lg border border-temple-gold/60 bg-cream-dark/60 font-body text-dark text-sm cursor-not-allowed select-none";
 
   return (
     <SectionWrapper id="donation" bg="alt" className="!py-14 md:!py-20">
@@ -316,14 +330,14 @@ export default function DonationSection() {
                 exit="exit"
               >
                 {/* Verified badge */}
-                <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5 mb-5">
-                  <ShieldCheck className="w-5 h-5 text-green-600 flex-shrink-0" />
+                <div className="flex items-center gap-2 bg-temple-gold/10 border border-temple-gold/30 rounded-lg px-4 py-2.5 mb-5">
+                  <ShieldCheck className="w-5 h-5 text-temple-gold flex-shrink-0" />
                   <div className="flex-1">
-                    <p className="font-body text-green-800 text-sm font-semibold">
+                    <p className="font-body text-dark text-sm font-semibold">
                       DigiLocker Verified
                     </p>
-                    <p className="font-body text-green-600 text-xs">
-                      Aadhaar & PAN fetched securely
+                    <p className="font-body text-medium text-xs">
+                      Identity verified securely via DigiLocker
                     </p>
                   </div>
                   <button
@@ -332,7 +346,7 @@ export default function DonationSection() {
                       setDirection(-1);
                       setStep(1);
                     }}
-                    className="font-body text-green-600 text-xs underline hover:text-green-800 cursor-pointer"
+                    className="font-body text-temple-crimson text-xs underline hover:text-temple-crimson-hover cursor-pointer"
                   >
                     Re-verify
                   </button>
@@ -397,32 +411,37 @@ export default function DonationSection() {
                           Full Name{" "}
                           <span className="text-temple-red">*</span>
                           {digilockerData?.fullName && (
-                            <span className="text-green-600 text-[10px] font-semibold bg-green-50 px-1.5 py-0.5 rounded">
-                              Auto-filled
+                            <span className="text-temple-gold text-[10px] font-semibold bg-temple-gold/10 px-1.5 py-0.5 rounded">
+                              DigiLocker
                             </span>
                           )}
                         </label>
-                        <input
-                          type="text"
-                          value={fullName}
-                          onChange={(e) => {
-                            setFullName(e.target.value);
-                            if (errors.fullName) {
-                              setErrors((prev) => {
-                                const n = { ...prev };
-                                delete n.fullName;
-                                return n;
-                              });
+                        <div className="relative">
+                          {digilockerData?.fullName && (
+                            <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-temple-gold" />
+                          )}
+                          <input
+                            type="text"
+                            value={fullName}
+                            onChange={(e) => {
+                              setFullName(e.target.value);
+                              if (errors.fullName) {
+                                setErrors((prev) => {
+                                  const n = { ...prev };
+                                  delete n.fullName;
+                                  return n;
+                                });
+                              }
+                            }}
+                            readOnly={!!digilockerData?.fullName}
+                            className={
+                              digilockerData?.fullName
+                                ? verifiedInputClass
+                                : inputClass
                             }
-                          }}
-                          readOnly={!!digilockerData?.fullName}
-                          className={
-                            digilockerData?.fullName
-                              ? verifiedInputClass
-                              : inputClass
-                          }
-                          placeholder="Your full name"
-                        />
+                            placeholder="Your full name"
+                          />
+                        </div>
                         {errors.fullName && (
                           <p className="text-temple-red text-xs mt-0.5 font-body">
                             {errors.fullName}
@@ -499,16 +518,19 @@ export default function DonationSection() {
                       <div>
                         <label className="font-body text-dark text-xs font-medium mb-1 flex items-center gap-1.5">
                           PAN Number
-                          <span className="text-green-600 text-[10px] font-semibold bg-green-50 px-1.5 py-0.5 rounded">
+                          <span className="text-temple-gold text-[10px] font-semibold bg-temple-gold/10 px-1.5 py-0.5 rounded">
                             DigiLocker
                           </span>
                         </label>
-                        <input
-                          type="text"
-                          value={digilockerData?.pan || "Fetched from DigiLocker"}
-                          readOnly
-                          className={verifiedInputClass}
-                        />
+                        <div className="relative">
+                          <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-temple-gold" />
+                          <input
+                            type="text"
+                            value={digilockerData?.pan || "Not available"}
+                            readOnly
+                            className={verifiedInputClass}
+                          />
+                        </div>
                       </div>
                     </div>
 
@@ -517,19 +539,19 @@ export default function DonationSection() {
                       <div>
                         <label className="font-body text-dark text-xs font-medium mb-1 flex items-center gap-1.5">
                           Aadhaar Number
-                          <span className="text-green-600 text-[10px] font-semibold bg-green-50 px-1.5 py-0.5 rounded">
+                          <span className="text-temple-gold text-[10px] font-semibold bg-temple-gold/10 px-1.5 py-0.5 rounded">
                             DigiLocker
                           </span>
                         </label>
-                        <input
-                          type="text"
-                          value={
-                            digilockerData?.aadhaarMasked ||
-                            "Fetched from DigiLocker"
-                          }
-                          readOnly
-                          className={verifiedInputClass}
-                        />
+                        <div className="relative">
+                          <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-temple-gold" />
+                          <input
+                            type="text"
+                            value={digilockerData?.aadhaarMasked || "Not available"}
+                            readOnly
+                            className={verifiedInputClass}
+                          />
+                        </div>
                       </div>
                       <div className="flex items-end">
                         <label className="flex items-center gap-2 cursor-pointer pb-2.5">
@@ -604,5 +626,13 @@ export default function DonationSection() {
         </motion.p>
       </motion.div>
     </SectionWrapper>
+  );
+}
+
+export default function DonationSection() {
+  return (
+    <Suspense>
+      <DonationSectionInner />
+    </Suspense>
   );
 }
