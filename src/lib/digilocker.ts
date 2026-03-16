@@ -102,8 +102,14 @@ export function getAuthorizationUrl(
     state,
     code_challenge: codeChallenge,
     code_challenge_method: "S256",
-    scope: "openid",
   });
+
+  // Only include scope if configured — requires openid to be enabled
+  // in the DigiLocker partner portal for this application
+  const scope = process.env.DIGILOCKER_SCOPE;
+  if (scope) {
+    params.set("scope", scope);
+  }
   return `${BASE_URL}/authorize?${params.toString()}`;
 }
 
