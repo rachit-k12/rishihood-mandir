@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ShieldCheck, ExternalLink, ArrowRight, ArrowLeft, CheckCircle, Lock } from "lucide-react";
+import { Loader2, ShieldCheck, ExternalLink, ArrowRight, ArrowLeft, CheckCircle, Lock, Upload } from "lucide-react";
 import MandalaDecoration from "@/components/ui/MandalaDecoration";
 import SectionWrapper from "@/components/ui/SectionWrapper";
 import OrnamentalDivider from "@/components/ui/OrnamentalDivider";
@@ -12,6 +12,7 @@ import {
   formatCurrency,
   PHONE_REGEX,
   EMAIL_REGEX,
+  PAN_REGEX,
 } from "@/lib/constants";
 
 const fadeUp = {
@@ -70,15 +71,29 @@ function DonationSectionInner() {
   const [digilockerLoading, setDigilockerLoading] = useState(false);
   const [digilockerError, setDigilockerError] = useState("");
 
+  // Skip DigiLocker mode
+  const [skippedDigilocker, setSkippedDigilocker] = useState(false);
+
   // Form state (step 2)
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [pan, setPan] = useState("");
+  const [aadhaar, setAadhaar] = useState("");
   const [anonymous, setAnonymous] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Document upload state
+  const [uploadedPanUrl, setUploadedPanUrl] = useState("");
+  const [uploadedAadhaarUrl, setUploadedAadhaarUrl] = useState("");
+  const [panUploading, setPanUploading] = useState(false);
+  const [aadhaarUploading, setAadhaarUploading] = useState(false);
+  const [panUploadDone, setPanUploadDone] = useState(false);
+  const [aadhaarUploadDone, setAadhaarUploadDone] = useState(false);
+  const [donorId, setDonorId] = useState("");
 
   const donationAmount = selectedAmount || Number(customAmount) || 0;
 
@@ -148,6 +163,111 @@ function DonationSectionInner() {
     }
   };
 
+  const handleSkipDigiLocker = () => {
+    setSkippedDigilocker(true);
+    setDigilockerData(null);
+    setDirection(1);
+    setStep(2);
+  };
+
+  const handleDocUpload = async (
+    file: File,
+    type: "pan" | "aadhaar"
+  ) => {
+    // We need a donorId to upload. If we don't have one yet, create the donor first.
+    let currentDonorId = donorId;
+    if (!currentDonorId) {
+      if (!email || !phone) {
+        setErrors((prev) => ({
+          ...prev,
+          [type === "pan" ? "panUpload" : "aadhaarUpload"]:
+            "Please fill in email and phone first",
+        }));
+        return;
+      }
+      try {
+        const res = await fetch("/api/payment/initiate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: 0,
+            firstname: fullName || "Donor",
+            email,
+            phone,
+            address: "",
+            pan: pan || "",
+            aadhaar: aadhaar || "",
+            anonymous: false,
+            digilockerVerified: false,
+            digilockerId: "",
+            panDocUrl: "",
+            aadhaarDocUrl: "",
+            dateOfBirth: "",
+            gender: "",
+            _createDonorOnly: true,
+          }),
+        });
+        const data = await res.json();
+        if (data.donorId) {
+          currentDonorId = data.donorId;
+          setDonorId(data.donorId);
+        }
+      } catch {
+        // Fallback: use a temporary ID
+      }
+    }
+
+    if (!currentDonorId) {
+      setErrors((prev) => ({
+        ...prev,
+        [type === "pan" ? "panUpload" : "aadhaarUpload"]:
+          "Please fill in email and phone first, then try again",
+      }));
+      return;
+    }
+
+    const setUploading = type === "pan" ? setPanUploading : setAadhaarUploading;
+    const setDone = type === "pan" ? setPanUploadDone : setAadhaarUploadDone;
+    const setUrl = type === "pan" ? setUploadedPanUrl : setUploadedAadhaarUrl;
+
+    setUploading(true);
+    setErrors((prev) => {
+      const n = { ...prev };
+      delete n[type === "pan" ? "panUpload" : "aadhaarUpload"];
+      return n;
+    });
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("donorId", currentDonorId);
+      formData.append("type", type);
+
+      const res = await fetch("/api/upload/document", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success && data.url) {
+        setUrl(data.url);
+        setDone(true);
+      } else {
+        setErrors((prev) => ({
+          ...prev,
+          [type === "pan" ? "panUpload" : "aadhaarUpload"]:
+            data.error || "Upload failed",
+        }));
+      }
+    } catch {
+      setErrors((prev) => ({
+        ...prev,
+        [type === "pan" ? "panUpload" : "aadhaarUpload"]: "Upload failed",
+      }));
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
     if (donationAmount < 1)
@@ -157,6 +277,8 @@ function DonationSectionInner() {
       newErrors.email = "Valid email required";
     if (!phone.trim() || !PHONE_REGEX.test(phone))
       newErrors.phone = "Valid 10-digit number required";
+    if (skippedDigilocker && pan && !PAN_REGEX.test(pan))
+      newErrors.pan = "Invalid PAN format";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -175,13 +297,13 @@ function DonationSectionInner() {
           email,
           phone,
           address: digilockerData?.address || "",
-          pan: digilockerData?.pan || "",
-          aadhaar: digilockerData?.aadhaarMasked || "",
+          pan: digilockerData?.pan || pan || "",
+          aadhaar: digilockerData?.aadhaarMasked || aadhaar || "",
           anonymous,
-          digilockerVerified: true,
+          digilockerVerified: !!digilockerData,
           digilockerId: digilockerData?.digilockerId || "",
-          panDocUrl: digilockerData?.panDocUrl || "",
-          aadhaarDocUrl: digilockerData?.aadhaarDocUrl || "",
+          panDocUrl: digilockerData?.panDocUrl || uploadedPanUrl || "",
+          aadhaarDocUrl: digilockerData?.aadhaarDocUrl || uploadedAadhaarUrl || "",
           dateOfBirth: digilockerData?.dateOfBirth || "",
           gender: digilockerData?.gender || "",
         }),
@@ -321,6 +443,14 @@ function DonationSectionInner() {
                   Your Aadhaar & PAN details will be fetched securely from
                   DigiLocker. We do not store your DigiLocker password.
                 </p>
+
+                <button
+                  type="button"
+                  onClick={handleSkipDigiLocker}
+                  className="font-body text-medium text-xs mt-4 underline hover:text-dark transition-colors cursor-pointer"
+                >
+                  Skip DigiLocker &mdash; enter details manually
+                </button>
               </motion.div>
             )}
 
@@ -333,28 +463,52 @@ function DonationSectionInner() {
                 animate="center"
                 exit="exit"
               >
-                {/* Verified badge */}
-                <div className="flex items-center gap-2 bg-temple-gold/10 border border-temple-gold/30 rounded-lg px-4 py-2.5 mb-5">
-                  <ShieldCheck className="w-5 h-5 text-temple-gold flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="font-body text-dark text-sm font-semibold">
-                      DigiLocker Verified
-                    </p>
-                    <p className="font-body text-medium text-xs">
-                      Identity verified securely via DigiLocker
-                    </p>
+                {/* Status badge */}
+                {digilockerData ? (
+                  <div className="flex items-center gap-2 bg-temple-gold/10 border border-temple-gold/30 rounded-lg px-4 py-2.5 mb-5">
+                    <ShieldCheck className="w-5 h-5 text-temple-gold flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-body text-dark text-sm font-semibold">
+                        DigiLocker Verified
+                      </p>
+                      <p className="font-body text-medium text-xs">
+                        Identity verified securely via DigiLocker
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDirection(-1);
+                        setStep(1);
+                      }}
+                      className="font-body text-temple-crimson text-xs underline hover:text-temple-crimson-hover cursor-pointer"
+                    >
+                      Re-verify
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDirection(-1);
-                      setStep(1);
-                    }}
-                    className="font-body text-temple-crimson text-xs underline hover:text-temple-crimson-hover cursor-pointer"
-                  >
-                    Re-verify
-                  </button>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-2 bg-cream-dark/40 border border-temple-gold-muted/30 rounded-lg px-4 py-2.5 mb-5">
+                    <div className="flex-1">
+                      <p className="font-body text-dark text-sm font-semibold">
+                        Manual Entry
+                      </p>
+                      <p className="font-body text-medium text-xs">
+                        Please fill in your details and upload PAN/Aadhaar documents below
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSkippedDigilocker(false);
+                        setDirection(-1);
+                        setStep(1);
+                      }}
+                      className="font-body text-temple-crimson text-xs underline hover:text-temple-crimson-hover cursor-pointer"
+                    >
+                      Use DigiLocker
+                    </button>
+                  </div>
+                )}
 
                 <form onSubmit={handleSubmit}>
                   {/* Amount Selection */}
@@ -551,40 +705,78 @@ function DonationSectionInner() {
                       <div>
                         <label className="font-body text-dark text-xs font-medium mb-1 flex items-center gap-1.5">
                           PAN Number
-                          <span className="text-temple-gold text-[10px] font-semibold bg-temple-gold/10 px-1.5 py-0.5 rounded">
-                            DigiLocker
-                          </span>
+                          {digilockerData?.pan && (
+                            <span className="text-temple-gold text-[10px] font-semibold bg-temple-gold/10 px-1.5 py-0.5 rounded">
+                              DigiLocker
+                            </span>
+                          )}
                         </label>
-                        <div className="relative">
-                          <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-temple-gold" />
+                        {digilockerData?.pan ? (
+                          <div className="relative">
+                            <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-temple-gold" />
+                            <input
+                              type="text"
+                              value={digilockerData.pan}
+                              readOnly
+                              className={verifiedInputClass}
+                            />
+                          </div>
+                        ) : (
                           <input
                             type="text"
-                            value={digilockerData?.pan || "Not available"}
-                            readOnly
-                            className={verifiedInputClass}
+                            value={pan}
+                            onChange={(e) =>
+                              setPan(e.target.value.toUpperCase().slice(0, 10))
+                            }
+                            className={inputClass}
+                            placeholder="ABCDE1234F"
+                            maxLength={10}
                           />
-                        </div>
+                        )}
+                        {errors.pan && (
+                          <p className="text-temple-red text-xs mt-0.5 font-body">
+                            {errors.pan}
+                          </p>
+                        )}
                       </div>
                     </div>
 
-                    {/* Row 3: Aadhaar (read-only) */}
+                    {/* Row 3: Aadhaar + Anonymous */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <label className="font-body text-dark text-xs font-medium mb-1 flex items-center gap-1.5">
                           Aadhaar Number
-                          <span className="text-temple-gold text-[10px] font-semibold bg-temple-gold/10 px-1.5 py-0.5 rounded">
-                            DigiLocker
-                          </span>
+                          {digilockerData?.aadhaarMasked && (
+                            <span className="text-temple-gold text-[10px] font-semibold bg-temple-gold/10 px-1.5 py-0.5 rounded">
+                              DigiLocker
+                            </span>
+                          )}
                         </label>
-                        <div className="relative">
-                          <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-temple-gold" />
+                        {digilockerData?.aadhaarMasked ? (
+                          <div className="relative">
+                            <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-temple-gold" />
+                            <input
+                              type="text"
+                              value={digilockerData.aadhaarMasked}
+                              readOnly
+                              className={verifiedInputClass}
+                            />
+                          </div>
+                        ) : (
                           <input
                             type="text"
-                            value={digilockerData?.aadhaarMasked || "Not available"}
-                            readOnly
-                            className={verifiedInputClass}
+                            inputMode="numeric"
+                            value={aadhaar}
+                            onChange={(e) =>
+                              setAadhaar(
+                                e.target.value.replace(/[^0-9]/g, "").slice(0, 12)
+                              )
+                            }
+                            className={inputClass}
+                            placeholder="12-digit Aadhaar number"
+                            maxLength={12}
                           />
-                        </div>
+                        )}
                       </div>
                       <div className="flex items-end">
                         <label className="flex items-center gap-2 cursor-pointer pb-2.5">
@@ -600,6 +792,103 @@ function DonationSectionInner() {
                         </label>
                       </div>
                     </div>
+
+                    {/* Document Upload (when DigiLocker skipped or docs not available) */}
+                    {skippedDigilocker && !digilockerData && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {/* PAN Card Upload */}
+                        <div>
+                          <label className="font-body text-dark text-xs font-medium mb-1 block">
+                            PAN Card Document
+                          </label>
+                          {panUploadDone ? (
+                            <div className="flex items-center gap-2 border border-green-300 bg-green-50 rounded-lg px-3 py-2.5">
+                              <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                              <span className="font-body text-green-700 text-xs">
+                                PAN card uploaded
+                              </span>
+                            </div>
+                          ) : (
+                            <label className="flex flex-col items-center justify-center border-2 border-dashed border-temple-gold-muted/50 rounded-lg px-3 py-4 cursor-pointer hover:border-temple-gold transition-colors">
+                              {panUploading ? (
+                                <Loader2 className="w-5 h-5 text-temple-gold animate-spin" />
+                              ) : (
+                                <Upload className="w-5 h-5 text-temple-gold mb-1" />
+                              )}
+                              <span className="font-body text-medium text-xs">
+                                {panUploading
+                                  ? "Uploading..."
+                                  : "Upload PAN card"}
+                              </span>
+                              <span className="font-body text-light text-[10px] mt-0.5">
+                                PDF, JPG, PNG (max 5MB)
+                              </span>
+                              <input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                className="hidden"
+                                disabled={panUploading}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleDocUpload(file, "pan");
+                                }}
+                              />
+                            </label>
+                          )}
+                          {errors.panUpload && (
+                            <p className="text-temple-red text-xs mt-0.5 font-body">
+                              {errors.panUpload}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Aadhaar Card Upload */}
+                        <div>
+                          <label className="font-body text-dark text-xs font-medium mb-1 block">
+                            Aadhaar Card Document
+                          </label>
+                          {aadhaarUploadDone ? (
+                            <div className="flex items-center gap-2 border border-green-300 bg-green-50 rounded-lg px-3 py-2.5">
+                              <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                              <span className="font-body text-green-700 text-xs">
+                                Aadhaar card uploaded
+                              </span>
+                            </div>
+                          ) : (
+                            <label className="flex flex-col items-center justify-center border-2 border-dashed border-temple-gold-muted/50 rounded-lg px-3 py-4 cursor-pointer hover:border-temple-gold transition-colors">
+                              {aadhaarUploading ? (
+                                <Loader2 className="w-5 h-5 text-temple-gold animate-spin" />
+                              ) : (
+                                <Upload className="w-5 h-5 text-temple-gold mb-1" />
+                              )}
+                              <span className="font-body text-medium text-xs">
+                                {aadhaarUploading
+                                  ? "Uploading..."
+                                  : "Upload Aadhaar card"}
+                              </span>
+                              <span className="font-body text-light text-[10px] mt-0.5">
+                                PDF, JPG, PNG (max 5MB)
+                              </span>
+                              <input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                className="hidden"
+                                disabled={aadhaarUploading}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleDocUpload(file, "aadhaar");
+                                }}
+                              />
+                            </label>
+                          )}
+                          {errors.aadhaarUpload && (
+                            <p className="text-temple-red text-xs mt-0.5 font-body">
+                              {errors.aadhaarUpload}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {errors.submit && (
                       <div className="bg-temple-red/10 border border-temple-red/30 rounded-lg p-3">

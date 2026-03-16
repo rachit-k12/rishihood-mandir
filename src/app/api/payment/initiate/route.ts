@@ -20,7 +20,27 @@ export async function POST(request: NextRequest) {
       aadhaarDocUrl,
       dateOfBirth,
       gender,
+      _createDonorOnly,
     } = body;
+
+    // If _createDonorOnly, just upsert the donor and return the ID
+    if (_createDonorOnly) {
+      const donor = await upsertDonor({
+        fullName: firstname || "Donor",
+        email,
+        phone,
+        address: address || "",
+        pan: pan || undefined,
+        aadhaarMasked: aadhaar || undefined,
+        dateOfBirth: dateOfBirth || undefined,
+        gender: gender || undefined,
+        digilockerVerified: digilockerVerified || false,
+        digilockerId: digilockerId || undefined,
+        panDocUrl: panDocUrl || undefined,
+        aadhaarDocUrl: aadhaarDocUrl || undefined,
+      });
+      return NextResponse.json({ success: true, donorId: donor.id });
+    }
 
     const key = process.env.EASEBUZZ_KEY;
     const salt = process.env.EASEBUZZ_SALT;

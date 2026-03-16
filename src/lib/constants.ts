@@ -18,6 +18,8 @@ export const AADHAAR_REGEX = /^\d{12}$/;
 export const PHONE_REGEX = /^[6-9]\d{9}$/;
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export const DONATION_TARGET = 30_000_000;
+
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -25,4 +27,16 @@ export function formatCurrency(amount: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+export function formatLargeAmount(amount: number): string {
+  if (amount >= 10_000_000) {
+    const crores = amount / 10_000_000;
+    return `${crores % 1 === 0 ? crores.toFixed(0) : crores.toFixed(2)} Cr`;
+  }
+  if (amount >= 100_000) {
+    const lakhs = amount / 100_000;
+    return `${lakhs % 1 === 0 ? lakhs.toFixed(0) : lakhs.toFixed(2)} L`;
+  }
+  return formatCurrency(amount);
 }

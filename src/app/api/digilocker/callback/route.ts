@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   exchangeCodeForToken,
   aggregateDonorData,
+  fetchDocumentBuffers,
   validateSignedState,
   deriveCodeVerifierFromState,
 } from "@/lib/digilocker";
+import { upsertDonor, storeDocumentForDonor } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   try {
@@ -82,6 +84,66 @@ export async function GET(request: NextRequest) {
       hasAadhaar: !!donorData.aadhaarMasked,
       hasAddress: !!donorData.address,
     });
+
+    // Fetch and store actual document PDFs if we have URIs and donor info
+    if (
+      donorData.email &&
+      donorData.phone &&
+      (donorData.panDocUrl || donorData.aadhaarDocUrl)
+    ) {
+      try {
+        const docBuffers = await fetchDocumentBuffers(
+          accessToken,
+          donorData.panDocUrl,
+          donorData.aadhaarDocUrl
+        );
+
+        // Upsert donor to get an ID for document storage
+        const donor = await upsertDonor({
+          fullName: donorData.fullName || "Unknown",
+          email: donorData.email,
+          phone: donorData.phone,
+          address: donorData.address || "",
+          pan: donorData.pan,
+          aadhaarMasked: donorData.aadhaarMasked,
+          dateOfBirth: donorData.dateOfBirth,
+          gender: donorData.gender,
+          digilockerVerified: true,
+          digilockerId: donorData.digilockerId,
+        });
+
+        if (docBuffers.pan) {
+          const docUrl = `/api/documents/${donor.id}/pan`;
+          await storeDocumentForDonor(
+            donor.id,
+            "pan",
+            docBuffers.pan.base64,
+            docBuffers.pan.mimeType,
+            docUrl
+          );
+          donorData.panDocUrl = docUrl;
+        }
+
+        if (docBuffers.aadhaar) {
+          const docUrl = `/api/documents/${donor.id}/aadhaar`;
+          await storeDocumentForDonor(
+            donor.id,
+            "aadhaar",
+            docBuffers.aadhaar.base64,
+            docBuffers.aadhaar.mimeType,
+            docUrl
+          );
+          donorData.aadhaarDocUrl = docUrl;
+        }
+
+        console.log("DigiLocker documents stored:", {
+          pan: !!docBuffers.pan,
+          aadhaar: !!docBuffers.aadhaar,
+        });
+      } catch (err) {
+        console.error("Non-blocking: failed to fetch/store documents:", err);
+      }
+    }
 
     // Encode the data and redirect back to donation page
     const encodedData = Buffer.from(JSON.stringify(donorData)).toString(

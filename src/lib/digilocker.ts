@@ -102,6 +102,7 @@ export function getAuthorizationUrl(
     state,
     code_challenge: codeChallenge,
     code_challenge_method: "S256",
+    scope: "openid",
   });
   return `${BASE_URL}/authorize?${params.toString()}`;
 }
@@ -253,6 +254,56 @@ export async function fetchDocument(
     response.headers.get("content-type") || "application/pdf";
   const arrayBuffer = await response.arrayBuffer();
   return { buffer: Buffer.from(arrayBuffer), contentType };
+}
+
+/**
+ * Fetch PAN and Aadhaar document buffers from DigiLocker.
+ * Returns base64-encoded content and mime type for each document found.
+ */
+export async function fetchDocumentBuffers(
+  accessToken: string,
+  panDocUri: string,
+  aadhaarDocUri: string
+): Promise<{
+  pan: { base64: string; mimeType: string } | null;
+  aadhaar: { base64: string; mimeType: string } | null;
+}> {
+  const result: {
+    pan: { base64: string; mimeType: string } | null;
+    aadhaar: { base64: string; mimeType: string } | null;
+  } = { pan: null, aadhaar: null };
+
+  if (panDocUri) {
+    try {
+      const { buffer, contentType } = await fetchDocument(
+        accessToken,
+        panDocUri
+      );
+      result.pan = {
+        base64: buffer.toString("base64"),
+        mimeType: contentType,
+      };
+    } catch (err) {
+      console.error("Failed to fetch PAN document:", err);
+    }
+  }
+
+  if (aadhaarDocUri) {
+    try {
+      const { buffer, contentType } = await fetchDocument(
+        accessToken,
+        aadhaarDocUri
+      );
+      result.aadhaar = {
+        base64: buffer.toString("base64"),
+        mimeType: contentType,
+      };
+    } catch (err) {
+      console.error("Failed to fetch Aadhaar document:", err);
+    }
+  }
+
+  return result;
 }
 
 // --- eAadhaar XML Parsing ---

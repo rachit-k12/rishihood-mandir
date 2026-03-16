@@ -21,6 +21,10 @@ model Donor {
   digilockerId       String?    @map("digilocker_id")
   panDocUrl          String?    @map("pan_doc_url")
   aadhaarDocUrl      String?    @map("aadhaar_doc_url")
+  panDocBase64       String?    @map("pan_doc_base64")
+  panDocMimeType     String?    @map("pan_doc_mime_type")
+  aadhaarDocBase64   String?    @map("aadhaar_doc_base64")
+  aadhaarDocMimeType String?    @map("aadhaar_doc_mime_type")
   createdAt          DateTime   @default(now()) @map("created_at")
   updatedAt          DateTime   @updatedAt @map("updated_at")
   donations          Donation[]
